@@ -1,0 +1,7 @@
+id,user_id,role,text,chips,timestamp
+e5000000-0000-0000-0000-000000000001,11111111-1111-1111-1111-111111111111,sai,"Good morning. Your 7-day Gut Score is 78. How can I help?","What should I eat today?|Remind me to log|Show my patterns",2026-04-30T07:30:00Z
+e5000000-0000-0000-0000-000000000002,11111111-1111-1111-1111-111111111111,user,"What should I eat today?",,2026-04-30T07:30:25Z
+e5000000-0000-0000-0000-000000000003,11111111-1111-1111-1111-111111111111,sai,"Fiber looks low today — consider lentils, oats, berries, or leafy greens. Tags that pattern with your best days: #highfiber, #oats. These are patterns from your own logs, not medical advice.",,2026-04-30T07:30:26Z
+e5000000-0000-0000-0000-000000000004,22222222-2222-2222-2222-222222222222,sai,"Good evening. Your 7-day Gut Score is 42. How can I help?","Show my patterns|What's my Gut Score?",2026-04-29T20:00:00Z
+e5000000-0000-0000-0000-000000000005,22222222-2222-2222-2222-222222222222,user,"Show my patterns",,2026-04-29T20:00:18Z
+e5000000-0000-0000-0000-000000000006,22222222-2222-2222-2222-222222222222,sai,"Here's what I see:\n• Pattern: #dairy appears before Type 6-7 (loose) outcomes (based on 6 occurrences, 2.3x your baseline).",,2026-04-29T20:00:19Z

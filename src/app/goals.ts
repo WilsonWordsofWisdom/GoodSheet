@@ -1,0 +1,16 @@
+export const GOALS = [
+  "Identify bloating triggers",
+  "Track fiber intake",
+  "Spot food sensitivities",
+  "General wellness",
+  "Lose weight",
+  "Build muscle",
+  "Increase energy",
+  "Reduce stress",
+  "Hydrate more",
+  "Cut down sugar",
+  "Increase protein intake",
+  "Manage IBS symptoms",
+  "Support gut microbiome",
+  "Improve cardio fitness",
+];
