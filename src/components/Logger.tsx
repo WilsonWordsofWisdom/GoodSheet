@@ -6,7 +6,8 @@ import { QuickChips } from "./QuickChips";
 import { FoodPicker } from "./FoodPicker";
 import { StoolAnalysis } from "./StoolAnalysis";
 import { FoodAnalysis } from "./FoodAnalysis";
-import type { AnyLog, BristolType, UserProfile } from "@/lib/types";
+import type { AnyLog, BristolType, StoolColor, UserProfile } from "@/lib/types";
+import { STOOL_COLOR_META } from "@/lib/correlation";
 import { saveLog } from "@/lib/storage";
 import { estimateCalories } from "@/lib/calorie";
 import { estimateCaloriesBurned } from "@/lib/exercise-calories";
@@ -39,26 +40,23 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");
   const [duration, setDuration] = useState(20);
   const [bristol, setBristol] = useState<BristolType | null>(null);
+  const [stoolColor, setStoolColor] = useState<StoolColor | null>(null);
   const [urgency, setUrgency] = useState<"low" | "medium" | "high">("medium");
   const [ease, setEase] = useState<"easy" | "normal" | "strained">("normal");
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined);
   const [entryDatetime, setEntryDatetime] = useState(() => toDatetimeLocal(new Date()));
-  // Bristol AI classifier state
   const [classifyResult, setClassifyResult] = useState<ClassificationResult | null>(null);
   const [classifyStatus, setClassifyStatus] = useState<"idle" | "analyzing" | "done" | "error">("idle");
   const [classifyError, setClassifyError] = useState<string | undefined>(undefined);
-  // Food AI classifier state
   const [foodClassifyResult, setFoodClassifyResult] = useState<FoodClassificationResult | null>(null);
   const [foodClassifyStatus, setFoodClassifyStatus] = useState<FoodClassifyStatus>("idle");
   const [foodClassifyError, setFoodClassifyError] = useState<string | undefined>(undefined);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Reset datetime to now each time the logger opens
   useEffect(() => {
     if (open) setEntryDatetime(toDatetimeLocal(new Date()));
   }, [open]);
 
-  // Preload MobileNet model when user switches to meal tab
   useEffect(() => {
     if (tab === "meal") preloadFoodClassifier();
   }, [tab]);
@@ -67,7 +65,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
 
   const reset = () => {
     setFood(null); setTags([]); setNote(""); setActivity("Walk"); setIntensity("medium");
-    setDuration(20); setBristol(null); setUrgency("medium"); setEase("normal");
+    setDuration(20); setBristol(null); setStoolColor(null); setUrgency("medium"); setEase("normal");
     setThumbnail(undefined);
     setEntryDatetime(toDatetimeLocal(new Date()));
     setClassifyResult(null); setClassifyStatus("idle"); setClassifyError(undefined);
@@ -84,17 +82,14 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
   };
 
   const handlePhoto = async (file: File) => {
-    // Store thumbnail only if user opted in
     if (storeThumbnails) {
       const compressed = await compressImage(file, 200, 0.6);
       setThumbnail(compressed);
     } else if (tab === "stool") {
-      // Still show a preview in-memory (not saved to log) so user sees the image while classifying
       const compressed = await compressImage(file, 200, 0.6);
       setThumbnail(compressed);
     }
 
-    // ── Meal tab: run Food AI classifier ─────────────────────────────────────
     if (tab === "meal") {
       if (!storeThumbnails) {
         const compressed = await compressImage(file, 200, 0.6);
@@ -114,7 +109,6 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
       }
     }
 
-    // ── Stool tab: run Bristol AI classifier ─────────────────────────────────
     if (tab === "stool") {
       setClassifyStatus("analyzing");
       setClassifyResult(null);
@@ -148,12 +142,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
         thumbnail: storeThumbnails ? thumbnail : undefined,
       };
     } else if (tab === "exercise") {
-      const calorieBurn = estimateCaloriesBurned(
-        activity,
-        intensity,
-        duration,
-        userProfile?.weightKg
-      );
+      const calorieBurn = estimateCaloriesBurned(activity, intensity, duration, userProfile?.weightKg);
       log = {
         id, type: "exercise", timestamp: ts,
         activity, intensity, durationMin: duration,
@@ -165,6 +154,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
       log = {
         id, type: "stool", timestamp: ts,
         bristol, urgency, ease,
+        stoolColor: stoolColor ?? undefined,
         note: note || undefined,
         thumbnail: storeThumbnails ? thumbnail : undefined,
       };
@@ -216,17 +206,12 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
               onPick={() => fileRef.current?.click()}
               onClear={() => {
                 setThumbnail(undefined);
-                setClassifyResult(null);
-                setClassifyStatus("idle");
-                setClassifyError(undefined);
-                setFoodClassifyResult(null);
-                setFoodClassifyStatus("idle");
-                setFoodClassifyError(undefined);
+                setClassifyResult(null); setClassifyStatus("idle"); setClassifyError(undefined);
+                setFoodClassifyResult(null); setFoodClassifyStatus("idle"); setFoodClassifyError(undefined);
               }}
             />
           )}
 
-          {/* AI classifier result – stool tab only */}
           {tab === "stool" && (classifyStatus === "analyzing" || classifyStatus === "done" || classifyStatus === "error") && (
             <StoolAnalysis
               result={classifyResult}
@@ -257,8 +242,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
                   )}
                 </div>
               )}
-              {/* Food AI classifier result – meal tab only */}
-              {tab === "meal" && foodClassifyStatus !== "idle" && (
+              {foodClassifyStatus !== "idle" && (
                 <FoodAnalysis
                   result={foodClassifyResult}
                   status={foodClassifyStatus}
@@ -306,11 +290,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
               <div>
                 <label>Duration: {duration} min</label>
                 <input
-                  type="range"
-                  min={5}
-                  max={120}
-                  step={5}
-                  value={duration}
+                  type="range" min={5} max={120} step={5} value={duration}
                   onChange={(e) => setDuration(+e.target.value)}
                   className="w-full mt-2 accent-[#4285F4]"
                 />
@@ -336,15 +316,9 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
                       i === "medium" ? "bg-[#FBBC05] text-[#202124]" :
                       "bg-[#EA4335] text-white";
                     return (
-                      <button
-                        key={i}
-                        onClick={() => setUrgency(i)}
-                        className={`py-2 rounded-full text-sm capitalize ${
-                          urgency === i ? activeColor : "bg-white border border-[#dadce0] text-[#5f6368]"
-                        }`}
-                      >
-                        {i}
-                      </button>
+                      <button key={i} onClick={() => setUrgency(i)}
+                        className={`py-2 rounded-full text-sm capitalize ${urgency === i ? activeColor : "bg-white border border-[#dadce0] text-[#5f6368]"}`}
+                      >{i}</button>
                     );
                   })}
                 </div>
@@ -358,19 +332,14 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
                       i === "normal" ? "bg-[#FBBC05] text-[#202124]" :
                       "bg-[#EA4335] text-white";
                     return (
-                      <button
-                        key={i}
-                        onClick={() => setEase(i)}
-                        className={`py-2 rounded-full text-sm capitalize ${
-                          ease === i ? activeColor : "bg-white border border-[#dadce0] text-[#5f6368]"
-                        }`}
-                      >
-                        {i}
-                      </button>
+                      <button key={i} onClick={() => setEase(i)}
+                        className={`py-2 rounded-full text-sm capitalize ${ease === i ? activeColor : "bg-white border border-[#dadce0] text-[#5f6368]"}`}
+                      >{i}</button>
                     );
                   })}
                 </div>
               </div>
+              <StoolColorPicker value={stoolColor} onChange={setStoolColor} />
             </>
           )}
 
@@ -385,7 +354,6 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
             />
           </div>
 
-          {/* ── Date & Time selector ── */}
           <div className="bg-[#f8f9fa] rounded-2xl border border-[#e8eaed] px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <CalendarClock className="w-4 h-4 text-[#4285F4] shrink-0" />
@@ -403,15 +371,8 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
           </div>
 
           <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handlePhoto(f);
-            }}
+            ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhoto(f); }}
           />
 
           <button
@@ -457,9 +418,7 @@ function PhotoField({
         </label>
         {!thumbnail && (
           <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-            isStool
-              ? "bg-[#e8f0fe] text-[#1967d2]"
-              : "bg-[#fff3e0] text-[#E65100]"
+            isStool ? "bg-[#e8f0fe] text-[#1967d2]" : "bg-[#fff3e0] text-[#E65100]"
           }`}>
             Auto-identifies on upload
           </span>
@@ -468,21 +427,15 @@ function PhotoField({
       {thumbnail ? (
         <div className="mt-2 relative w-full">
           <img src={thumbnail} alt="" className="w-full h-40 object-cover rounded-2xl" />
-          <button
-            onClick={onClear}
-            className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5"
-          >
+          <button onClick={onClear} className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5">
             <X className="w-4 h-4" />
           </button>
         </div>
       ) : (
         <button
-          type="button"
-          onClick={onPick}
+          type="button" onClick={onPick}
           className={`mt-2 w-full h-32 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center hover:bg-[#f8f9fa] ${
-            isStool
-              ? "border-[#4285F4]/40 bg-[#f0f4ff]"
-              : "border-[#F57C00]/40 bg-[#fff8f0]"
+            isStool ? "border-[#4285F4]/40 bg-[#f0f4ff]" : "border-[#F57C00]/40 bg-[#fff8f0]"
           }`}
         >
           <Camera className={`w-6 h-6 mb-1 ${isStool ? "text-[#4285F4]" : "text-[#F57C00]"}`} />
@@ -499,18 +452,11 @@ function PhotoField({
 }
 
 function CalorieBurnDisplay({
-  activity,
-  intensity,
-  duration,
-  weightKg,
+  activity, intensity, duration, weightKg,
 }: {
-  activity: string;
-  intensity: "low" | "medium" | "high";
-  duration: number;
-  weightKg?: number;
+  activity: string; intensity: "low" | "medium" | "high"; duration: number; weightKg?: number;
 }) {
   const estimate = estimateCaloriesBurned(activity, intensity, duration, weightKg);
-
   return (
     <div className="bg-[#e6f4ea] rounded-xl p-3 space-y-2">
       <div className="flex items-center gap-2 text-[#137333]">
@@ -520,9 +466,7 @@ function CalorieBurnDisplay({
       <div className="text-xs text-[#5f6368] space-y-0.5">
         <div>Based on {estimate.met} METs (Metabolic Equivalent)</div>
         <div>{estimate.note}</div>
-        <div className="text-[#3c4043] mt-1">
-          Source: Ainsworth BE et al. (2011) Compendium of Physical Activities
-        </div>
+        <div className="text-[#3c4043] mt-1">Source: Ainsworth BE et al. (2011) Compendium of Physical Activities</div>
       </div>
       {!weightKg && (
         <div className="text-xs text-[#b06000] bg-[#fef7e0] px-2 py-1.5 rounded-lg">
@@ -556,8 +500,73 @@ async function compressImage(file: File, maxDim: number, quality: number): Promi
   return canvas.toDataURL("image/jpeg", quality);
 }
 
-// Helper: format a Date as datetime-local input value (local time)
 function toDatetimeLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const COLOR_ORDER: StoolColor[] = [
+  "brown", "dark-brown", "green", "orange", "yellow", "red", "black", "pale",
+];
+
+function StoolColorPicker({
+  value,
+  onChange,
+}: {
+  value: StoolColor | null;
+  onChange: (c: StoolColor | null) => void;
+}) {
+  const selected = value ? STOOL_COLOR_META[value] : null;
+
+  return (
+    <div>
+      <label>Stool colour <span className="text-xs text-[#9e9e9e] font-normal">(optional)</span></label>
+      <div className="mt-2 grid grid-cols-4 gap-2">
+        {COLOR_ORDER.map((color) => {
+          const meta = STOOL_COLOR_META[color];
+          const isSelected = value === color;
+          return (
+            <button
+              key={color}
+              onClick={() => onChange(isSelected ? null : color)}
+              className={`flex flex-col items-center gap-1 py-2 px-1 rounded-2xl border text-xs transition-all ${
+                isSelected ? "border-[#4285F4] bg-blue-50 shadow-sm" : "border-[#dadce0] bg-white"
+              }`}
+              title={color}
+            >
+              <span
+                className="w-6 h-6 rounded-full border border-[#e0e0e0]"
+                style={{ backgroundColor: meta.hex }}
+              />
+              <span className="capitalize leading-tight text-center text-[10px] text-[#5f6368]">
+                {color.replace("-", "\u2011")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selected && selected.flagLevel !== "none" && (
+        <div
+          className={`mt-3 rounded-2xl px-4 py-3 text-sm flex gap-2 items-start ${
+            selected.flagLevel === "alert"
+              ? "bg-red-50 text-[#c62828]"
+              : selected.flagLevel === "warn"
+                ? "bg-amber-50 text-[#e65100]"
+                : "bg-blue-50 text-[#1565c0]"
+          }`}
+        >
+          <span className="mt-0.5 shrink-0">
+            {selected.flagLevel === "alert" ? "🚨" : selected.flagLevel === "warn" ? "⚠️" : "ℹ️"}
+          </span>
+          <div>
+            <p className="font-medium">{selected.flagMessage}</p>
+            {selected.dietTip && (
+              <p className="mt-1 text-xs opacity-80">{selected.dietTip}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

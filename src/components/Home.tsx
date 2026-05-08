@@ -32,12 +32,10 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
     return d.toDateString() === n.toDateString();
   });
 
-  // Latest notification (first item only)
   const latestReminder = reminders[0] ?? null;
 
   return (
     <div className="space-y-6">
-      {/* ── Latest notification banner ── */}
       {latestReminder && (
         <div className="flex items-start gap-3 bg-[#fef7e0] border border-[#f9c845]/40 rounded-2xl px-4 py-3">
           <Bell className="w-4 h-4 text-[#FBBC05] mt-0.5 shrink-0" />
@@ -45,7 +43,6 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
         </div>
       )}
 
-      {/* ── Log entry button ── */}
       <button
         onClick={onLogEntry}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#4285F4] text-white font-medium shadow-sm hover:bg-[#1967d2] active:scale-[0.98] transition-all"
@@ -54,7 +51,6 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
         Log entry
       </button>
 
-      {/* ── Gut Score card ── */}
       <div className="bg-white rounded-3xl border border-[#e8eaed] p-6 flex flex-col items-center relative overflow-hidden">
         <button
           onClick={() => setShowInfo(true)}
@@ -104,7 +100,7 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
                 <div className="bg-[#f8f9fa] rounded-2xl p-4 font-mono text-xs border border-[#e8eaed]">
                   <p className="text-[#4285F4] font-bold mb-1">THE FORMULA:</p>
                   <p className="whitespace-pre-wrap">
-                    Score = (# Optimal Stool Logs / # Total Logs) × 100 × Frequency Bonus{"\n"}
+                    Score = (# Optimal Stool Logs / # Total Logs) × 100 × Frequency Bonus × Avg Colour Modifier{"\n"}
                     {"\n"}
                     Where, user gets a 1.3x Frequency Bonus for getting 7 optimal stool log for the week.{"\n"}
                     {"\n"}
@@ -143,6 +139,13 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
                       the score relevant.
                     </span>
                   </li>
+                  <li className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#9C27B0] mt-1.5 shrink-0" />
+                    <span>
+                      <strong className="text-[#202124]">Colour Modifier:</strong>{" "}
+                      Averaged across all logs with a colour recorded (0.60–1.00). Brown = 1.0 (no effect); concerning colours like pale, red, or black lower the modifier. If a dietary explanation is detected from your meal tags, the penalty is partially mitigated.
+                    </span>
+                  </li>
                 </ul>
               </div>
 
@@ -165,48 +168,23 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
       />
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat
-          label="Logs today"
-          value={today.length}
-          accent="#4285F4"
-        />
-        <Stat
-          label="Fiber tags"
-          value={fiber}
-          accent="#34A853"
-        />
-        <Stat
-          label="Activity 24h"
-          value={exercise}
-          accent="#FBBC05"
-        />
+        <Stat label="Logs today" value={today.length} accent="#4285F4" />
+        <Stat label="Fiber tags" value={fiber} accent="#34A853" />
+        <Stat label="Activity 24h" value={exercise} accent="#FBBC05" />
       </div>
 
       <div>
         <h3 className="text-[#202124] mb-3">Daily Dairy</h3>
-        <Timeline
-          logs={logs.slice(0, 30)}
-          onDelete={onDeleteLog}
-        />
+        <Timeline logs={logs.slice(0, 30)} onDelete={onDeleteLog} />
       </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: string;
-}) {
+function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e8eaed] p-3 text-center">
-      <div className="text-2xl" style={{ color: accent }}>
-        {value}
-      </div>
+      <div className="text-2xl" style={{ color: accent }}>{value}</div>
       <div className="text-xs text-[#5f6368] mt-1">{label}</div>
     </div>
   );
@@ -229,32 +207,17 @@ function GutScoreRing({ score }: { score: number }) {
     <div className="flex flex-col items-center">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f1f3f4" strokeWidth={strokeWidth} />
           <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#f1f3f4"
-            strokeWidth={strokeWidth}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={progress}
+            cx={size / 2} cy={size / 2} r={radius} fill="none"
+            stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"
+            strokeDasharray={circumference} strokeDashoffset={progress}
             style={{ transition: "stroke-dashoffset 0.6s ease" }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-4xl font-bold text-[#202124]">{score}</span>
-          <span className="text-xs font-medium mt-0.5" style={{ color }}>
-            {label}
-          </span>
+          <span className="text-xs font-medium mt-0.5" style={{ color }}>{label}</span>
         </div>
       </div>
       <p className="text-sm font-semibold text-[#202124] mt-2">Gut Score</p>

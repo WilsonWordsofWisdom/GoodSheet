@@ -1,5 +1,5 @@
 import type { AnyLog, MealLog, StoolLog } from "./types";
-import { findPatterns, fiberToday, recentExerciseCount, gutScore } from "./correlation";
+import { findPatterns, fiberToday, recentExerciseCount, gutScore, STOOL_COLOR_META, hasDietaryExplanation } from "./correlation";
 
 const HOUR = 3600 * 1000;
 
@@ -78,7 +78,7 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
   }
 
   if (/score|gut score/.test(q)) {
-    return msg(`Your 7-day Gut Score is ${gutScore(logs)}. It tracks how often your stools fall in the optimal Type 3–5 range.`);
+    return msg(`Your 7-day Gut Score is ${gutScore(logs)}. It tracks how often your stools fall in the optimal Type 3–5 range, weighted by stool colour.`);
   }
 
   if (/transit|how long/.test(q)) {
@@ -92,7 +92,37 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
     return msg(`Approx ${hrs}h transit from your last meal to your last stool.`);
   }
 
-  // 1) Food to avoid
+  if (/col[ou]r|poop col[ou]r|stool col[ou]r|why.*col[ou]r|col[ou]r.*poop/.test(q)) {
+    const recentStools = logs
+      .filter((l): l is StoolLog => l.type === "stool" && l.stoolColor !== undefined)
+      .slice(0, 3);
+    if (!recentStools.length) {
+      return msg(
+        "You haven't logged a stool colour yet. Next time you log a stool, tap the colour picker to record it — I can then explain what it might mean.",
+        ["What do stool colours mean?", "Log a stool"]
+      );
+    }
+    const meals = logs.filter((l): l is MealLog => l.type === "meal");
+    const parts: string[] = ["Here's what your recent stool colours suggest:\n"];
+    for (const s of recentStools) {
+      const meta = STOOL_COLOR_META[s.stoolColor!];
+      const explained = hasDietaryExplanation(s, meals);
+      const date = new Date(s.timestamp).toLocaleDateString();
+      parts.push(
+        `• ${date} — ${s.stoolColor} (${meta.flagLevel === "none" ? "✅ normal" : meta.flagLevel === "info" ? "ℹ️ info" : meta.flagLevel === "warn" ? "⚠️ note" : "🚨 flag"}): ${meta.flagMessage || "Looks healthy!"}${explained ? " (likely diet-related)" : ""}`
+      );
+    }
+    parts.push("\nThese are informational patterns, not medical diagnoses.");
+    return msg(parts.join("\n"), ["What affects stool colour?", "Show my patterns"]);
+  }
+
+  if (/what affect|colour.*mean|mean.*colour|stool colour.*explain|explain.*stool colour/.test(q)) {
+    return msg(
+      "Stool colour is shaped by:\n• **Diet**: Leafy greens → green; beets/tomatoes → red; carrots → orange\n• **Bile**: Bile gives brown its colour — pale stools can signal bile duct issues\n• **Transit speed**: Fast transit (green/yellow); slow (very dark brown)\n• **Supplements**: Iron → black; certain antacids → pale\n• **Medical**: Unexplained red or black warrants a doctor visit\n\nLogging your colour helps me factor it into your Gut Score.",
+      ["Show my colour history", "What's my Gut Score?"]
+    );
+  }
+
   if (/avoid|bad food|harmful food|triggers/.test(q)) {
     return msg(
       "To keep things moving smoothly, try to minimize:\n• Highly processed snacks (low fiber)\n• Excessive red meat (can slow transit)\n• Large amounts of dairy (for some)\n• Fried, greasy foods\n\nCheck your 'Insights' tab to see which specific tags I've flagged as triggers for you!",
@@ -100,7 +130,6 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
     );
   }
 
-  // 2) Good food for gut health
   if (/good food|gut health food|recommend food|fiber food/.test(q)) {
     return msg(
       "For a happy gut, aim for:\n• Probiotics: Kimchi, Yogurt, Tempeh\n• Soluble Fiber: Oats, beans, apples\n• Insoluble Fiber: Whole grains, nuts, cauliflower\n• Hydration: Water is key for fiber to work!\n\nPro-tip: Try more Singaporean 'Local' options like Brown Rice or extra kailan.",
@@ -108,7 +137,6 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
     );
   }
 
-  // 3) Poop smoothly
   if (/smooth|constipat|hard poop|difficult|water/.test(q)) {
     return msg(
       "To help things pass smoothly:\n• Hydrate: Aim for 2-3L of water daily.\n• Fiber: Gradually increase your fiber intake.\n• Position: Try using a small stool to elevate your feet (Squatty Potty style).\n• Routine: Go when you feel the urge; don't hold it in!",
@@ -116,7 +144,6 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
     );
   }
 
-  // 4) Exercises for bowels
   if (/exercise|movement|workout|activity|muscle/.test(q)) {
     return msg(
       "Movement is like a massage for your colon! Try:\n• Walking: A brisk 15-min walk after meals.\n• Core Work: Gentle twists or planks to engage abdominal muscles.\n• Yoga: Cat-Cow or Child's Pose help relax the digestive tract.\n• Cardio: Jogging or swimming to stimulate intestinal contractions.",
@@ -124,7 +151,6 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
     );
   }
 
-  // 5) AI / classifier questions
   if (/ai|classifier|photo|image|camera|tensorflow|tf\.?js|classify|detect|scan/.test(q)) {
     return msg(
       "Circle of Life now has a built-in Bristol Stool Scale image classifier — and it runs 100% on your device using TensorFlow.js. Here's how it works:\n\n📸 Tap the Stool tab in the Logger, then hit 'Photo for AI Bristol Analysis'.\n🧠 TF.js extracts 4 visual features: brightness, edge density, color warmth, and texture variance.\n🔬 These are compared against calibrated prototypes for all 7 Bristol types.\n✅ The top suggestion is shown with a confidence %. Tap 'Apply' to pre-fill your Bristol picker.\n\nZero data leaves your device — no cloud API, no tracking.",
@@ -140,8 +166,8 @@ export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
   }
 
   return msg(
-    "I can suggest food for the day, set reminders, or summarize your patterns. What would you like?",
-    ["What should I eat today?", "Show my patterns", "What's my Gut Score?"]
+    "I can suggest food for the day, set reminders, summarize your patterns, or explain stool colours. What would you like?",
+    ["What should I eat today?", "Show my patterns", "What's my Gut Score?", "Explain stool colours"]
   );
 }
 
@@ -165,11 +191,30 @@ export function checkReminders(logs: AnyLog[], now = Date.now()): string[] {
   if (hr >= 13 && hr < 15 && meals < 2) out.push("Lunch reminder — tap + to log.");
   if (hr >= 19 && exercise === 0) out.push("No activity logged today. Even a 10-min walk counts.");
   if (hr >= 21 && stools === 0) out.push("End-of-day check: did you log today's bowel movement?");
-  
+
   if (hrsSinceLastPoop >= 18 && hrsSinceLastPoop < 48) {
     out.push("It's been over 18 hours since your last log. Maybe time to visit the toilet?");
   } else if (hrsSinceLastPoop >= 48) {
     out.push("No logs in 48 hours. Focus on hydration and fiber today!");
+  }
+
+  const concerningColors: Array<"pale" | "red" | "black" | "yellow"> = ["pale", "red", "black", "yellow"];
+  const recentWindow = now - 48 * HOUR;
+  const allMeals = logs.filter((l): l is MealLog => l.type === "meal");
+  for (const stool of logs.filter(
+    (l): l is StoolLog =>
+      l.type === "stool" &&
+      l.timestamp >= recentWindow &&
+      l.stoolColor !== undefined &&
+      concerningColors.includes(l.stoolColor as "pale" | "red" | "black" | "yellow")
+  )) {
+    const meta = STOOL_COLOR_META[stool.stoolColor!];
+    if (meta.flagLevel === "alert" || meta.flagLevel === "warn") {
+      const explained = hasDietaryExplanation(stool, allMeals);
+      if (!explained) {
+        out.push(meta.notifMessage);
+      }
+    }
   }
 
   return out;
