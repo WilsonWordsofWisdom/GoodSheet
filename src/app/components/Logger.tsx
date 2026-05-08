@@ -5,7 +5,8 @@ import { QuickChips } from "./QuickChips";
 import { FoodPicker } from "./FoodPicker";
 import { StoolAnalysis } from "./StoolAnalysis";
 import { FoodAnalysis } from "./FoodAnalysis";
-import type { AnyLog, BristolType, UserProfile } from "../types";
+import type { AnyLog, BristolType, UserProfile, StoolColor } from "../types";
+import { STOOL_COLOR_META } from "../correlation";
 import { saveLog } from "../storage";
 import { estimateCalories } from "../calorie";
 import { estimateCaloriesBurned } from "../exercise-calories";
@@ -40,6 +41,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
   const [bristol, setBristol] = useState<BristolType | null>(null);
   const [urgency, setUrgency] = useState<"low" | "medium" | "high">("medium");
   const [ease, setEase] = useState<"easy" | "normal" | "strained">("normal");
+  const [stoolColor, setStoolColor] = useState<StoolColor | null>(null);
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined);
   const [entryDatetime, setEntryDatetime] = useState(() => toDatetimeLocal(new Date()));
   // Bristol AI classifier state
@@ -67,6 +69,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
   const reset = () => {
     setFood(null); setTags([]); setNote(""); setActivity("Walk"); setIntensity("medium");
     setDuration(20); setBristol(null); setUrgency("medium"); setEase("normal");
+    setStoolColor(null);
     setThumbnail(undefined);
     setEntryDatetime(toDatetimeLocal(new Date()));
     setClassifyResult(null); setClassifyStatus("idle"); setClassifyError(undefined);
@@ -164,6 +167,7 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
       log = {
         id, type: "stool", timestamp: ts,
         bristol, urgency, ease,
+        stoolColor: stoolColor ?? undefined,
         note: note || undefined,
         thumbnail: storeThumbnails ? thumbnail : undefined,
       };
@@ -370,6 +374,9 @@ export function Logger({ open, onClose, onSaved, storeThumbnails, userProfile }:
                   })}
                 </div>
               </div>
+
+              {/* ── Stool Colour picker ── */}
+              <StoolColorPicker value={stoolColor} onChange={setStoolColor} />
             </>
           )}
 
@@ -559,4 +566,94 @@ async function compressImage(file: File, maxDim: number, quality: number): Promi
 function toDatetimeLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* ── Ordered array for the colour grid ───────────────────────────────── */
+const COLOR_ORDER: StoolColor[] = [
+  "brown", "dark-brown", "green", "orange", "yellow", "red", "black", "pale",
+];
+
+function StoolColorPicker({
+  value,
+  onChange,
+}: {
+  value: StoolColor | null;
+  onChange: (c: StoolColor | null) => void;
+}) {
+  const meta = value ? STOOL_COLOR_META[value] : null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <label className="mb-0">Stool colour</label>
+        <span className="text-[10px] text-[#9aa0a6] bg-[#f1f3f4] px-1.5 py-0.5 rounded-full">
+          optional
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-x-2 gap-y-3">
+        {COLOR_ORDER.map((id) => {
+          const info = STOOL_COLOR_META[id];
+          const isSelected = value === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChange(isSelected ? null : id)}
+              className="flex flex-col items-center gap-1.5 focus:outline-none"
+            >
+              <span
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-150 ${
+                  isSelected
+                    ? "ring-[3px] ring-[#4285F4] ring-offset-2 scale-110"
+                    : "ring-1 ring-black/10"
+                }`}
+                style={{ backgroundColor: info.hex }}
+              >
+                {isSelected && (
+                  <svg
+                    viewBox="0 0 12 12"
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2 6l3 3 5-5" />
+                  </svg>
+                )}
+              </span>
+              <span className="text-[10px] text-[#5f6368] text-center leading-tight w-full">
+                {info.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Contextual flag banner */}
+      {meta && meta.flagLevel !== "none" && (
+        <div
+          className={`mt-3 rounded-2xl px-3.5 py-3 text-xs leading-relaxed space-y-1 ${
+            meta.flagLevel === "alert"
+              ? "bg-[#fce8e6] text-[#a50e0e]"
+              : meta.flagLevel === "warning"
+              ? "bg-[#fef7e0] text-[#b06000]"
+              : "bg-[#e8f0fe] text-[#1967d2]"
+          }`}
+        >
+          <p className="font-semibold">{meta.flagMessage}</p>
+          {meta.dietTip && (
+            <p className="opacity-80">{meta.dietTip}</p>
+          )}
+          {(meta.flagLevel === "alert" || meta.flagLevel === "warning") && (
+            <p className="opacity-60 text-[10px] pt-0.5">
+              This is informational only — not medical advice. Always consult a healthcare professional.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

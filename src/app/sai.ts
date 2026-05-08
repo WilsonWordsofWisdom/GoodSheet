@@ -1,5 +1,5 @@
 import type { AnyLog, MealLog, StoolLog } from "./types";
-import { findPatterns, fiberToday, recentExerciseCount, gutScore } from "./correlation";
+import { findPatterns, fiberToday, recentExerciseCount, gutScore, STOOL_COLOR_META, hasDietaryExplanation } from "./correlation";
 
 const HOUR = 3600 * 1000;
 
@@ -36,6 +36,73 @@ export function saiGreeting(logs: AnyLog[]): SaiMessage {
 export function saiReply(input: string, logs: AnyLog[]): SaiMessage {
   const q = input.toLowerCase();
   const now = Date.now();
+
+  // ── Stool colour query ──────────────────────────────────────────────────────
+  if (/col[ou]r|poop col[ou]r|stool col[ou]r|why.*poop|green poop|red poop|black poop|pale poop|yellow poop|orange poop/.test(q)) {
+    // Look at the last 14 days of stool logs that have a colour
+    const cutoff = now - 14 * 24 * HOUR;
+    const coloredStools = logs.filter(
+      (l): l is StoolLog => l.type === "stool" && l.timestamp >= cutoff && !!l.stoolColor
+    );
+    const meals = logs.filter((l): l is MealLog => l.type === "meal");
+
+    if (coloredStools.length === 0) {
+      return msg(
+        "I haven't seen any colour-tagged stools yet. When you log a stool, there's an optional colour picker — selecting it helps me give you more accurate gut health insights and adjusts your Gut Score.",
+        ["What do stool colours mean?", "What's my Gut Score?"]
+      );
+    }
+
+    const latest = coloredStools[0];
+    const meta = STOOL_COLOR_META[latest.stoolColor!];
+    const explained = hasDietaryExplanation(latest, meals);
+
+    const colorSummary = coloredStools.reduce<Record<string, number>>((acc, s) => {
+      const k = STOOL_COLOR_META[s.stoolColor!].label;
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+    const summaryText = Object.entries(colorSummary)
+      .map(([label, count]) => `${label} (${count}×)`)
+      .join(", ");
+
+    const parts: string[] = [`In the last 14 days your logged colours: ${summaryText}.`];
+
+    if (meta.flagLevel === "alert") {
+      parts.push(
+        explained
+          ? `Your most recent ${meta.label.toLowerCase()} stool appears to have a dietary explanation based on your food log — keep monitoring.`
+          : `${meta.flagMessage} ${meta.dietTip ? "Dietary note: " + meta.dietTip : ""}`
+      );
+    } else if (meta.flagLevel === "warning") {
+      parts.push(meta.flagMessage);
+      if (meta.dietTip) parts.push(meta.dietTip);
+    } else if (meta.flagLevel === "mild") {
+      parts.push(`Most recent: ${meta.label}. ${meta.flagMessage}`);
+      if (meta.dietTip && !explained) parts.push(meta.dietTip);
+    } else {
+      parts.push("Your recent colour looks healthy — brown is the gold standard.");
+    }
+
+    parts.push("This is informational only, not medical advice.");
+    return msg(parts.join(" "), ["What affects stool colour?", "Show my patterns"]);
+  }
+
+  // ── What affects stool colour ───────────────────────────────────────────────
+  if (/what affect|cause.*col[ou]r|why.*col[ou]r|col[ou]r.*cause/.test(q)) {
+    return msg(
+      "Stool colour is mainly driven by bile pigments breaking down in your gut:\n\n" +
+      "• Brown — healthy bile cycle, normal transit\n" +
+      "• Green — rapid transit or leafy greens/matcha/pandan\n" +
+      "• Orange — beta-carotene foods (carrot, pumpkin, sweet potato)\n" +
+      "• Yellow — possible fat malabsorption or turmeric/curry\n" +
+      "• Red — lower GI concern or dragon fruit/beetroot\n" +
+      "• Black — upper GI concern or squid ink/charcoal/iron supplements\n" +
+      "• Pale/Clay — bile duct or liver issue (see a GP if this persists)\n\n" +
+      "Because you log meals too, Circle of Life cross-checks your food history to tell the difference between dietary and clinical causes.",
+      ["Log a stool", "What's my Gut Score?"]
+    );
+  }
 
   if (/eat|food|recommend|suggest/.test(q)) {
     const fiber = fiberToday(logs);
@@ -165,11 +232,43 @@ export function checkReminders(logs: AnyLog[], now = Date.now()): string[] {
   if (hr >= 13 && hr < 15 && meals < 2) out.push("Lunch reminder — tap + to log.");
   if (hr >= 19 && exercise === 0) out.push("No activity logged today. Even a 10-min walk counts.");
   if (hr >= 21 && stools === 0) out.push("End-of-day check: did you log today's bowel movement?");
-  
+
   if (hrsSinceLastPoop >= 18 && hrsSinceLastPoop < 48) {
     out.push("It's been over 18 hours since your last log. Maybe time to visit the toilet?");
   } else if (hrsSinceLastPoop >= 48) {
     out.push("No logs in 48 hours. Focus on hydration and fiber today!");
+  }
+
+  // ── Stool colour health flags (last 48 h) ────────────────────────────────
+  const CONCERNING_COLORS: Array<"red" | "black" | "pale" | "yellow"> = ["pale", "red", "black", "yellow"];
+  const allMeals = logs.filter((l): l is MealLog => l.type === "meal");
+  const recentStools = logs.filter(
+    (l): l is StoolLog =>
+      l.type === "stool" &&
+      l.timestamp >= now - 48 * HOUR &&
+      !!l.stoolColor &&
+      CONCERNING_COLORS.includes(l.stoolColor as any)
+  ) as StoolLog[];
+
+  // Emit at most one colour flag (highest severity first)
+  for (const colorId of CONCERNING_COLORS) {
+    const match = recentStools.find((s) => s.stoolColor === colorId);
+    if (!match) continue;
+    const meta = STOOL_COLOR_META[colorId];
+    const explained = hasDietaryExplanation(match, allMeals);
+
+    // Pale always flags regardless of diet; others only flag if unexplained
+    if (colorId === "pale" || !explained) {
+      out.push(meta.notifMessage);
+      break;
+    }
+    // Dietary explanation found — emit a softer informational note
+    if (explained && (colorId === "red" || colorId === "black")) {
+      out.push(
+        `${meta.label} stool logged — your food log suggests a dietary cause. Monitor if it continues.`
+      );
+      break;
+    }
   }
 
   return out;

@@ -103,9 +103,9 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
                 <div className="bg-[#f8f9fa] rounded-2xl p-4 font-mono text-xs border border-[#e8eaed]">
                   <p className="text-[#4285F4] font-bold mb-1">THE FORMULA:</p>
                   <p className="whitespace-pre-wrap">
-                    Score = (# Optimal Stool Logs / # Total Logs) × 100 × Frequency Bonus{"\n"}
+                    Score = (# Optimal Logs / # Total Logs) × 100 × Frequency Bonus × Avg Colour Modifier{"\n"}
                     {"\n"}
-                    Where, user gets a 1.3x Frequency Bonus for getting 7 optimal stool log for the week.{"\n"}
+                    Where, user gets a 1.3× Frequency Bonus for 7 optimal logs per week.{"\n"}
                     {"\n"}
                     (Score is capped at 100)
                   </p>
@@ -132,6 +132,19 @@ export function Home({ logs, reminders, onDeleteLog, onLogEntry }: Props) {
                       <strong>1.3 (130%)</strong> when you reach 7. Fewer
                       optimal logs scale the bonus down proportionally (e.g.
                       4 optimal logs → 4 ÷ 7 × 1.3 ≈ 0.74×).
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#9C27B0] mt-1.5 shrink-0" />
+                    <span>
+                      <strong className="text-[#202124]">Colour Modifier (0.60–1.00):</strong>{" "}
+                      When you log a stool colour, a per-log multiplier is applied.
+                      Brown = 1.00 (no penalty). Concerning colours — yellow, red, black,
+                      or pale — apply a progressive deduction (down to 0.60 for pale/clay).
+                      The penalty is <strong>partially forgiven</strong> if your food log
+                      within 48 h explains the colour (e.g. dragon fruit → red, charcoal
+                      bun → black). Logs without a colour logged default to 1.00 so
+                      existing data is unaffected.
                     </span>
                   </li>
                   <li className="flex gap-3">
