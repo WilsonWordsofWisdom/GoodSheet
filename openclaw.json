@@ -1,0 +1,67 @@
+{
+  // Global tool deny list — applies to ALL agents as a safety baseline.
+  // These tools cannot be re-enabled by per-agent config alone.
+  tools: {
+    deny: ["exec", "apply_patch", "write", "edit", "process"],
+    elevated: {
+      enabled: true,
+      // Only the authenticated Main Agent user may request elevated tools.
+      // Replace YOUR_TELEGRAM_USER_ID with your actual Telegram user ID.
+      allowFrom: {
+        telegram: ["YOUR_TELEGRAM_USER_ID"],
+      },
+    },
+  },
+
+  agents: {
+    // Safe baseline inherited by every agent unless overridden below.
+    defaults: {
+      tools: {
+        allow: ["memory_get", "memory_set", "browser.search", "read"],
+        deny: ["exec", "apply_patch", "write", "edit", "process", "browser.navigate"],
+      },
+    },
+
+    list: [
+      // Main Agent — orchestrator and approval authority.
+      // Gets write + apply_patch for workspace management; exec stays elevated-only.
+      {
+        id: "main",
+        tools: {
+          allow: ["read", "write", "memory_get", "memory_set", "browser.search", "apply_patch"],
+          elevated: true,
+        },
+      },
+
+      // Firewall Agent — zero-trust content scanner.
+      // Needs to fetch and inspect external content but must never write or execute.
+      {
+        id: "firewall-agent",
+        tools: {
+          allow: ["read", "memory_get", "browser.search", "browser.navigate"],
+          deny: ["exec", "apply_patch", "write", "edit", "process"],
+        },
+      },
+
+      // Threat Intel Agent — research and reporting only.
+      // Reads and browses; no mutations of any kind permitted.
+      {
+        id: "threat-intel-agent",
+        tools: {
+          allow: ["read", "memory_get", "browser.search", "browser.navigate"],
+          deny: ["exec", "apply_patch", "write", "edit", "process"],
+        },
+      },
+
+      // Hardening Agent — security auditor and patcher.
+      // May read, write, and apply patches to files but has no shell exec or browser access.
+      {
+        id: "hardening-agent",
+        tools: {
+          allow: ["read", "write", "apply_patch", "memory_get", "memory_set"],
+          deny: ["exec", "process", "browser.navigate"],
+        },
+      },
+    ],
+  },
+}
