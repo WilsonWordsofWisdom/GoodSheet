@@ -1,67 +1,237 @@
 {
-  // Global tool deny list — applies to ALL agents as a safety baseline.
-  // These tools cannot be re-enabled by per-agent config alone.
-  tools: {
-    deny: ["exec", "apply_patch", "write", "edit", "process"],
-    elevated: {
-      enabled: true,
-      // Only the authenticated Main Agent user may request elevated tools.
-      // Replace YOUR_TELEGRAM_USER_ID with your actual Telegram user ID.
-      allowFrom: {
-        telegram: ["YOUR_TELEGRAM_USER_ID"],
-      },
-    },
+  "meta": {
+    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedAt": "2026-05-30T15:47:07.321Z"
   },
-
-  agents: {
-    // Safe baseline inherited by every agent unless overridden below.
-    defaults: {
-      tools: {
-        allow: ["memory_get", "memory_set", "browser.search", "read"],
-        deny: ["exec", "apply_patch", "write", "edit", "process", "browser.navigate"],
-      },
-    },
-
-    list: [
-      // Main Agent — orchestrator and approval authority.
-      // Gets write + apply_patch for workspace management; exec stays elevated-only.
-      {
-        id: "main",
-        tools: {
-          allow: ["read", "write", "memory_get", "memory_set", "browser.search", "apply_patch"],
-          elevated: true,
-        },
-      },
-
-      // Firewall Agent — zero-trust content scanner.
-      // Needs to fetch and inspect external content but must never write or execute.
-      {
-        id: "firewall-agent",
-        tools: {
-          allow: ["read", "memory_get", "browser.search", "browser.navigate"],
-          deny: ["exec", "apply_patch", "write", "edit", "process"],
-        },
-      },
-
-      // Threat Intel Agent — research and reporting only.
-      // Reads and browses; no mutations of any kind permitted.
-      {
-        id: "threat-intel-agent",
-        tools: {
-          allow: ["read", "memory_get", "browser.search", "browser.navigate"],
-          deny: ["exec", "apply_patch", "write", "edit", "process"],
-        },
-      },
-
-      // Hardening Agent — security auditor and patcher.
-      // May read, write, and apply patches to files but has no shell exec or browser access.
-      {
-        id: "hardening-agent",
-        tools: {
-          allow: ["read", "write", "apply_patch", "memory_get", "memory_set"],
-          deny: ["exec", "process", "browser.navigate"],
-        },
-      },
-    ],
+  "wizard": {
+    "lastRunAt": "2026-05-30T15:47:07.138Z",
+    "lastRunVersion": "2026.3.13",
+    "lastRunCommand": "doctor",
+    "lastRunMode": "local"
   },
+  "auth": {
+    "profiles": {
+      "openrouter:default": {
+        "provider": "openrouter",
+        "mode": "api_key"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openrouter/google/gemma-4-31b-it"
+      },
+      "models": {
+        "openrouter/auto": {
+          "alias": "OpenRouter"
+        }
+      },
+      "workspace": "/home/mol_kokhing/.openclaw/workspace",
+      "contextTokens": 150000,
+      "compaction": {
+        "reserveTokens": 80000,
+        "model": "google/gemini-2.0-flash-001",
+        "memoryFlush": {}
+      },
+      "heartbeat": {
+        "every": "0m",
+        "directPolicy": "block"
+      },
+      "sandbox": {
+        "mode": "off"
+      },
+      "tools": {
+        "allow": ["memory_get", "memory_set", "browser.search", "read"],
+        "deny": ["exec", "apply_patch", "write", "edit", "process", "browser.navigate"]
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "workspace": "/home/mol_kokhing/.openclaw/workspace",
+        "agentDir": "/home/mol_kokhing/.openclaw/agents/main/agent",
+        "model": "openrouter/google/gemma-4-31b-it",
+        "params": {
+          "maxTokens": 150000
+        },
+        "tools": {
+          "allow": ["read", "write", "memory_get", "memory_set", "browser.search", "apply_patch"],
+          "elevated": true
+        }
+      },
+      {
+        "id": "researchbot",
+        "name": "researchbot",
+        "workspace": "/home/mol_kokhing/.openclaw/workspace-researchbot",
+        "agentDir": "/home/mol_kokhing/.openclaw/agents/researchbot/agent",
+        "model": "openrouter/google/gemma-4-31b-it",
+        "params": {
+          "maxTokens": 50000
+        },
+        "tools": {
+          "allow": ["read", "memory_get", "browser.search", "browser.navigate"],
+          "deny": ["exec", "apply_patch", "write", "edit", "process"]
+        }
+      },
+      {
+        "id": "tcdmarcus_bot",
+        "name": "tcdmarcus_bot",
+        "workspace": "/home/mol_kokhing/.openclaw/workspace-tcdmarcus_bot",
+        "agentDir": "/home/mol_kokhing/.openclaw/agents/tcdmarcus_bot/agent",
+        "model": "openrouter/google/gemma-4-31b-it",
+        "params": {
+          "maxTokens": 16000
+        },
+        "tools": {
+          "allow": ["read", "memory_get", "browser.search"],
+          "deny": ["exec", "apply_patch", "write", "edit", "process", "browser.navigate"]
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding",
+    "deny": ["exec", "apply_patch", "write", "edit", "process"],
+    "elevated": {
+      "enabled": true,
+      "allowFrom": {
+        "telegram": ["YOUR_TELEGRAM_USER_ID"]
+      }
+    },
+    "web": {
+      "search": {
+        "enabled": true,
+        "provider": "brave",
+        "apiKey": "YOUR_BRAVE_API_KEY"
+      }
+    },
+    "exec": {
+      "host": "sandbox",
+      "security": "allowlist"
+    }
+  },
+  "bindings": [
+    {
+      "type": "route",
+      "agentId": "researchbot",
+      "match": {
+        "channel": "telegram",
+        "accountId": "tcdresearch_bot"
+      }
+    },
+    {
+      "type": "route",
+      "agentId": "tcdmarcus_bot",
+      "match": {
+        "channel": "telegram",
+        "accountId": "tcdmarcus_bot"
+      }
+    }
+  ],
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "cron": {
+    "maxConcurrentRuns": 2
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "selfChatMode": false,
+      "groupPolicy": "allowlist",
+      "debounceMs": 0,
+      "accounts": {
+        "nil": {
+          "enabled": true,
+          "dmPolicy": "pairing",
+          "groupPolicy": "allowlist",
+          "debounceMs": 0
+        },
+        "default": {
+          "dmPolicy": "disabled",
+          "groupPolicy": "allowlist",
+          "debounceMs": 0
+        }
+      },
+      "mediaMaxMb": 50
+    },
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["*"],
+      "groupPolicy": "allowlist",
+      "streaming": "partial",
+      "accounts": {
+        "default": {
+          "enabled": true,
+          "dmPolicy": "allowlist",
+          "botToken": "YOUR_DEFAULT_BOT_TOKEN",
+          "allowFrom": ["*"],
+          "groupPolicy": "allowlist",
+          "streaming": "partial"
+        },
+        "tcdmarcus_bot": {
+          "enabled": true,
+          "dmPolicy": "allowlist",
+          "botToken": "YOUR_TCDMARCUS_BOT_TOKEN",
+          "allowFrom": ["*"],
+          "groupPolicy": "allowlist",
+          "streaming": "partial"
+        },
+        "tcdresearch_bot": {
+          "enabled": true,
+          "dmPolicy": "pairing",
+          "botToken": "YOUR_TCDRESEARCH_BOT_TOKEN",
+          "groupPolicy": "allowlist",
+          "streaming": "partial"
+        }
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "YOUR_GATEWAY_AUTH_TOKEN"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "screen.record",
+        "sms.send",
+        "contacts.add"
+      ]
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      },
+      "whatsapp": {
+        "enabled": true
+      },
+      "brave": {
+        "config": {
+          "webSearch": {
+            "apiKey": "YOUR_BRAVE_API_KEY"
+          }
+        }
+      }
+    }
+  }
 }
